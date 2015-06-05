@@ -5,4 +5,5 @@ Data come from Teeter et al 2007. [Genome-wide patterns of gene flow across a ho
   
 Specifically, the data come from Supp Table 4 available [here](http://genome.cshlp.org/content/suppl/2007/11/19/gr.6757907.DC1/TeeterSuppTable4.xls)
 
-We converted this .xls file to a .csv fromat. To simpligy manipulation and data analyses, we removed the '#' before RDS, added 'chr' before each marker number,  and  removed the first line, which read 'Supplementary Table 4. Genotype data for 39 autosomal and 13 X-linked markers.  Animals are listed by R.D. Sage's (RDS) collection numbers. Distance refers to distance in km from the western edge of the hybrid zone transect.  D= M. domesticus allele, M = M. musculus allele.  A blank indicates no data collected.'
+We converted this .xls file to a .csv fromat. To simpligy manipulation and data analyses, we removed the '#' before RDS, added 'chr' before each marker number,  and  removed the first line, which read  
+> > *Supplementary Table 4. Genotype data for 39 autosomal and 13 X-linked markers.  Animals are listed by R.D. Sage's (RDS) collection numbers. Distance refers to distance in km from the western edge of the hybrid zone transect.  D= M. domesticus allele, M = M. musculus allele.  A blank indicates no data collected.*
