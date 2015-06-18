@@ -51,10 +51,8 @@ betweenChrCompSplit <- function(CHR_A.FILENAME, CHR_B.FILENAME, a, s1 = 1, e1 = 
 
 
 # Example usage
-setwd("/Users/ybrandva/Dropbox/LD_lowess_simulations_with_Yaniv/forYaniv_troubleshoot_mem") 
-arrArgs <- unlist(strsplit("genotypes_CALM_updatemsg.txt hybrid_index_CALM_msgupdate 1 2", " "))
-hybridindex<-unlist(read.table(arrArgs[2],header=TRUE,as.is=T))
-focalchrom1<-as.numeric(arrArgs[3])
-focalchrom2<-as.numeric(arrArgs[4])
-betweenChrCompSplit("prep_1.txt","prep_2.txt",hybridindex, s1 = 1, e1 =2, return.table = TRUE)
-
+#arrArgs <- unlist(strsplit("genotypes_CALM_updatemsg.txt hybrid_index_CALM_msgupdate 1 2", " "))
+#hybridindex<-unlist(read.table(arrArgs[2],header=TRUE,as.is=T))
+#focalchrom1<-as.numeric(arrArgs[3])
+#focalchrom2<-as.numeric(arrArgs[4])
+#betweenChrCompSplit("prep_1.txt","prep_2.txt",hybridindex, s1 = 1, e1 =2, return.table = TRUE)

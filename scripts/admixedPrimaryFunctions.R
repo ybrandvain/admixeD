@@ -44,8 +44,8 @@ gcline <- function(x, n, y){
   ests         <- est$par
   convergence  <- est$convergence
   names(ests)  <- names(start)
-  u            <- estimates["u"]
-  v            <- estimates["v"]
+  u            <- ests["u"]
+  v            <- ests["v"]
   this.gc      <- (x^v/(x^v+(1-x)^v *exp(u)))
   return(this.gc)
 }
@@ -101,12 +101,25 @@ getCline <- function(l, a, reps = 1000, return.processed = FALSE){
 }
 
 LDcalcs <- function(l1,l2,a){
+  ok <- !is.na(l1@l + l2@l)
+  these.genos <- cbind(A = l1@l, B = l2@l)[ok,]
+  allele.counts <- c(colSums(these.genos), colSums(abs(1-these.genos)))
+  names(allele.counts) <- c("A","B","a","b")
+  geno.table <- table(data.frame(A=factor(these.genos[,1], levels = c(1,.5,0)),B=factor(these.genos[,2], levels = c(1,.5,0))))
+  geno.counts <- c(  
+    AB = sum(geno.table[1,] * c(1,1/2,0)) + sum(geno.table[2,]/2 * c(1,1/2,0)),
+    Ab = sum(geno.table[1,] * c(0,1/2,1)) + sum(geno.table[2,]/2 * c(0,1/2,1)),
+    aB = sum(geno.table[3,] * c(1,1/2,0)) + sum(geno.table[2,]/2 * c(1,1/2,0)),
+    ab = sum(geno.table[3,] * c(0,1/2,1)) + sum(geno.table[2,]/2 * c(0,1/2,1))
+  )
   cln.D        <- mean(l1@l*l2@l - l1@cline*l2@cline,na.rm=T)
   cln.R        <- cln.D / (sqrt(mean((l1@l-l1@cline)^2,na.rm=T))*sqrt(mean((l2@l-l2@cline)^2,na.rm=T)))
   sim.cln.D    <- colMeans(l1@sim.l*l2@sim.l - l1@sim.cline*l2@sim.cline,na.rm=T)
   sim.cln.R    <- sim.cln.D / 
     (sqrt(colMeans((l1@sim.l-l1@sim.cline)^2,na.rm=T)) * sqrt(colMeans((l2@sim.l-l2@sim.cline)^2,na.rm=T)))
-  return(c(
+  results <-c(
+    allele.counts, 
+    geno.counts,
     reg.D         = mean(l1@l*l2@l,na.rm=T) - mean(l1@l,na.rm=T) * mean(l2@l,na.rm=T),
     adx.D         = mean(l1@l*l2@l-a^2,na.rm=T),
     cln.D         = cln.D,
@@ -114,5 +127,6 @@ LDcalcs <- function(l1,l2,a){
     cln.R         = cln.R,
     p.cln.R       = 2 * min(sum(cln.R > sim.cln.R,na.rm=T) , sum(cln.R < sim.cln.R,na.rm=T)) / sum(!is.na(sim.cln.D)),
     n.chances     = sum(!is.na(sim.cln.D))
-  ))
+  )
+  return(results)
 }
