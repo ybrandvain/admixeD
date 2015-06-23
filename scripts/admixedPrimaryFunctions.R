@@ -112,11 +112,12 @@ LDcalcs <- function(l1,l2,a){
     aB = sum(geno.table[3,] * c(1,1/2,0)) + sum(geno.table[2,]/2 * c(1,1/2,0)),
     ab = sum(geno.table[3,] * c(0,1/2,1)) + sum(geno.table[2,]/2 * c(0,1/2,1))
   )
-  cln.D        <- mean(l1@l*l2@l - l1@cline*l2@cline,na.rm=T)
-  cln.R        <- cln.D / (sqrt(mean((l1@l-l1@cline)^2,na.rm=T))*sqrt(mean((l2@l-l2@cline)^2,na.rm=T)))
-  sim.cln.D    <- colMeans(l1@sim.l*l2@sim.l - l1@sim.cline*l2@sim.cline,na.rm=T)
+  cln.D        <- mean(  (l1@l - l1@cline) * (l2@l - l2@cline), na.rm=T)
+  cln.R        <- cln.D / (sqrt(mean((l1@l-l1@cline)[ok]^2))*sqrt(mean((l2@l-l2@cline)[ok]^2)))
+  # sim.cln.D    <- colMeans(l1@sim.l*l2@sim.l - l1@sim.cline*l2@sim.cline,na.rm=T)
+  sim.cln.D    <- colMeans(  (l1@sim.l- l1@sim.cline) * (l2@sim.l- l2@sim.cline),na.rm=T)
   sim.cln.R    <- sim.cln.D / 
-    (sqrt(colMeans((l1@sim.l-l1@sim.cline)^2,na.rm=T)) * sqrt(colMeans((l2@sim.l-l2@sim.cline)^2,na.rm=T)))
+    (sqrt(colMeans((l1@sim.l-l1@sim.cline)[ok,]^2)) * sqrt(colMeans((l2@sim.l-l2@sim.cline)[ok,]^2)))
   results <-c(
     allele.counts, 
     geno.counts,

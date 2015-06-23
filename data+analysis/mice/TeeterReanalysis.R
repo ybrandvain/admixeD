@@ -4,8 +4,9 @@
 setwd("/Users/ybrandva/Desktop/projects/admixeD/data+analysis/mice")
 #Make sure you're directory is the mouse data
 #teeter.data              <- read.csv("EVO_846_sm_TableS1.csv",head=TRUE)
-teeter.data              <- read.csv("TeeterSuppTable4take2.csv",head=TRUE)
+teeter.data              <- read.csv("TeeterSuppTable4.csv",head=TRUE)
 geno.cols                <- grep("chr", names(teeter.data))
+teeter.data <- teeter.data[teeter.data$Locality == "Neufahrn, Germany",]
 
 teeter.data[, geno.cols] <-apply(teeter.data[,geno.cols],2,function(locus){
   locus[locus %in% c("MD","DM")]       <- .5
@@ -18,11 +19,11 @@ teeter.data[, geno.cols] <-apply(teeter.data[,geno.cols],2,function(locus){
 hybridindex <- rowMeans(teeter.data[, geno.cols] ,na.rm =T) # caclulating individual admixture props
 hist(hybridindex)
 
-extreme.acest <- hybridindex > .5
-middle.acest <- hybridindex > .3 &  hybridindex < .7
-hybridindex  <- hybridindex[middle.acest] 
-teeter.data  <- teeter.data[middle.acest,]
-hist(hybridindex)
+#extreme.acest <- hybridindex > .5
+#middle.acest <- hybridindex > .3 &  hybridindex < .7
+#hybridindex  <- hybridindex[middle.acest] 
+#teeter.data  <- teeter.data[middle.acest,]
+#hist(hybridindex)
 
 loc.chr <- sapply(strsplit( names(teeter.data)[geno.cols], ".", fixed=T),function(X){X[1]})
 all.chr <- as.list(unique(loc.chr))
