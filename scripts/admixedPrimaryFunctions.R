@@ -51,18 +51,6 @@ pcor.test <- function (x, y, z, method = c("pearson", "kendall", "spearman"))
              Method = method)
 }
 
-# Here we make class "admx" (probably not necessary), but why not?
-setClass(Class="admx", 
-         slots = c( 
-           n.inds       = "numeric",
-           n.reps       = "numeric",
-           l            = "numeric",
-           sim.l        = "matrix",
-           cline        = "numeric",
-           l.rnk.lklhd  = "numeric",
-           sim.cline    = "matrix"
-         )
-)
 
 LL.fn <- function(par, SD = SD, x, n, y) {
   # calculate the log-likelihood of the data given the cline
@@ -110,8 +98,8 @@ processLocus <- function(l.vals){
   last         <-   last+n.inds
   sim.cline    <-   matrix(l.vals[(1+last):(last+n.reps*n.inds)], nrow = n.inds)
   l.rnk.lklhd  <-   l.vals[length(l.vals)] 
-  return(new(Class="admx", 
-             n.inds = n.inds, n.reps = n.reps, l = l, sim.l = sim.l, cline = cline, l.rnk.lklhd = l.rnk.lklhd, sim.cline = sim.cline
+  return(list(n.inds = n.inds, n.reps = n.reps, l = l, sim.l = sim.l, 
+             cline = cline, l.rnk.lklhd = l.rnk.lklhd, sim.cline = sim.cline
   ))
 }
 
@@ -148,8 +136,8 @@ getCline <- function(l, a, reps = 1000, return.processed = FALSE){
 }
 
 LDcalcs <- function(l1,l2,a){
-  ok <- !is.na(l1@l + l2@l)
-  these.genos <- cbind(A = l1@l, B = l2@l)[ok,]
+  ok <- !is.na(l1$l + l2$l)
+  these.genos <- cbind(A = l1$l, B = l2$l)[ok,]
   allele.counts <- c(colSums(these.genos), colSums(abs(1-these.genos)))
   names(allele.counts) <- c("A","B","a","b")
   geno.table <- table(data.frame(A=factor(these.genos[,1], levels = c(1,.5,0)),B=factor(these.genos[,2], levels = c(1,.5,0))))
@@ -159,26 +147,24 @@ LDcalcs <- function(l1,l2,a){
     aB = sum(geno.table[3,] * c(1,1/2,0)) + sum(geno.table[2,]/2 * c(1,1/2,0)),
     ab = sum(geno.table[3,] * c(0,1/2,1)) + sum(geno.table[2,]/2 * c(0,1/2,1))
   )
-  cln.D        <- mean(  (l1@l - l1@cline) * (l2@l - l2@cline), na.rm=T)
-  cln.R        <- cln.D / (sqrt(mean((l1@l-l1@cline)[ok]^2))*sqrt(mean((l2@l-l2@cline)[ok]^2)))
-  # sim.cln.D    <- colMeans(l1@sim.l*l2@sim.l - l1@sim.cline*l2@sim.cline,na.rm=T)
-  sim.cln.D    <- colMeans(  (l1@sim.l- l1@sim.cline) * (l2@sim.l- l2@sim.cline),na.rm=T)
+  cln.D        <- mean(  (l1$l - l1$cline) * (l2$l - l2$cline), na.rm=T)
+  cln.R        <- cln.D / (sqrt(mean((l1$l-l1$cline)[ok]^2))*sqrt(mean((l2$l-l2$cline)[ok]^2)))
+  sim.cln.D    <- colMeans(  (l1$sim.l- l1$sim.cline) * (l2$sim.l- l2$sim.cline),na.rm=T)
   sim.cln.R    <- sim.cln.D / 
-    (sqrt(colMeans((l1@sim.l-l1@sim.cline)[ok,]^2)) * sqrt(colMeans((l2@sim.l-l2@sim.cline)[ok,]^2)))
-  no.var <- length(unique(l1@l[ok])) == 0 |  length(unique(l2@l[ok]) )== 0
-  if(no.var){pcor = c(estimate= NA, p.value = NA, statistic = NA)}
-  if(!no.var){pcor = pcor.test( these.genos[,1], these.genos[,2],a[ok])[1:3]}
+    (sqrt(colMeans((l1$sim.l-l1$sim.cline)[ok,]^2)) * sqrt(colMeans((l2$sim.l-l2$sim.cline)[ok,]^2)))
+  p.cor = pcor.test( these.genos[,1], these.genos[,2],a[ok])[1:3]
   results <-c(
     allele.counts, 
     geno.counts,
-    reg.D         = mean(l1@l*l2@l,na.rm=T) - mean(l1@l,na.rm=T) * mean(l2@l,na.rm=T),
-    adx.D         = mean(l1@l*l2@l-a^2,na.rm=T),
+    reg.D         = mean(l1$l*l2$l,na.rm=T) - mean(l1$l[ok]) * mean(l2$l[ok]),
+    reg.R         = (mean(l1$l*l2$l,na.rm=T) - mean(l1$l[ok]) * mean(l2$l[ok])) / sqrt(var(l1$l[ok])*var(l2$l[ok])),
+    adx.D         = mean(l1$l*l2$l-a^2,na.rm=T),
     cln.D         = cln.D,
     p.cln.D       = 2 * min(sum(cln.D > sim.cln.D,na.rm=T) , sum(cln.D < sim.cln.D,na.rm=T)) / sum(!is.na(sim.cln.D)),
     cln.R         = cln.R,
     p.cln.R       = 2 * min(sum(cln.R > sim.cln.R,na.rm=T) , sum(cln.R < sim.cln.R,na.rm=T)) / sum(!is.na(sim.cln.D)),
     n.chances     = sum(!is.na(sim.cln.D)),
-    pcor
+    p.cor
   )
   return( unlist(results) )
 }

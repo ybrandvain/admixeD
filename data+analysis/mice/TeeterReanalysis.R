@@ -63,5 +63,4 @@ all.ld <- do.call(rbind,apply(chr.combos,1,function(COMBO){
 }))
 
 
-all.ld.filtered <- all.ld[rowSums(all.ld[,c("A","B","a","b")]<10) == 0,]
 
