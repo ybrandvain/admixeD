@@ -52,7 +52,7 @@ rownames(chr.combos) <-  paste(chr.combos[,1],chr.combos[,2],sep="_")
 all.ld <- do.call(rbind,apply(chr.combos,1,function(COMBO){
   print(COMBO)
   all.pw.comps = do.call(rbind,lapply( all.processes.chr[[COMBO[1]]] ,function(LA){
-    do.call(rbind,lapply(all.processes.chr[[COMBO[2]]] ,function(LB){
+    do.call(rbind,lapply( (all.processes.chr[[COMBO[2]]]) ,function(LB){
       c(LDcalcs(l1 = LA, l2 = LB, a = hybridindex))      
     }))
   }))

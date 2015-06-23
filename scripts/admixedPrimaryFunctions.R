@@ -3,6 +3,53 @@
 # Used to calculate LD in admixed population [controlling for heterogeneity in ancestry proportions]
 # If we where to release a packge these would probably be the primary functions.
 
+#install.packages("ppcor")
+#library(ppcor)
+pcor <- function (x, method = c("pearson", "kendall", "spearman")) 
+{
+  method <- match.arg(method)
+  if (is.data.frame(x)) 
+    x <- as.matrix(x)
+  if (!is.matrix(x)) 
+    stop("supply a matrix-like 'x'")
+  if (!(is.numeric(x) || is.logical(x))) 
+    stop("'x' must be numeric")
+  stopifnot(is.atomic(x))
+  n <- dim(x)[1]
+  gp <- dim(x)[2] - 2
+  cvx <- cov(x, method = method)
+  if(det(cvx) == 0){
+    return(list(estimate = matrix(rep(NA,9),nrow=3), p.value = matrix(rep(NA,9),nrow=3), statistic = matrix(rep(NA,9),nrow=3), 
+         n = n, gp = gp, method = method)) }
+  icvx <- solve(cvx)
+  pcor <- -cov2cor(icvx)
+  diag(pcor) <- 1
+  if (method == "kendall") {
+    statistic <- pcor/sqrt(2 * (2 * (n - gp) + 5)/(9 * (n -  gp) * (n - 1 - gp)))
+    p.value <- 2 * pnorm(-abs(statistic))
+  }
+  else {
+    statistic <- pcor * sqrt((n - 2 - gp)/(1 - pcor^2))
+    p.value <- 2 * pnorm(-abs(statistic))
+  }
+  diag(statistic) <- 0
+  diag(p.value) <- 0
+  list(estimate = pcor, p.value = p.value, statistic = statistic, 
+       n = n, gp = gp, method = method)
+}
+
+pcor.test <- function (x, y, z, method = c("pearson", "kendall", "spearman")) 
+{
+  method <- match.arg(method)
+  x <- c(x)
+  y <- c(y)
+  z <- as.data.frame(z)
+  xyz <- data.frame(x, y, z)
+  pcor = pcor(xyz, method = method)
+  data.frame(estimate = pcor$est[1, 2], p.value = pcor$p.value[1, 2], 
+             statistic = pcor$statistic[1, 2], n = pcor$n, gp = pcor$gp, 
+             Method = method)
+}
 
 # Here we make class "admx" (probably not necessary), but why not?
 setClass(Class="admx", 
@@ -118,6 +165,9 @@ LDcalcs <- function(l1,l2,a){
   sim.cln.D    <- colMeans(  (l1@sim.l- l1@sim.cline) * (l2@sim.l- l2@sim.cline),na.rm=T)
   sim.cln.R    <- sim.cln.D / 
     (sqrt(colMeans((l1@sim.l-l1@sim.cline)[ok,]^2)) * sqrt(colMeans((l2@sim.l-l2@sim.cline)[ok,]^2)))
+  no.var <- length(unique(l1@l[ok])) == 0 |  length(unique(l2@l[ok]) )== 0
+  if(no.var){pcor = c(estimate= NA, p.value = NA, statistic = NA)}
+  if(!no.var){pcor = pcor.test( these.genos[,1], these.genos[,2],a[ok])[1:3]}
   results <-c(
     allele.counts, 
     geno.counts,
@@ -127,7 +177,8 @@ LDcalcs <- function(l1,l2,a){
     p.cln.D       = 2 * min(sum(cln.D > sim.cln.D,na.rm=T) , sum(cln.D < sim.cln.D,na.rm=T)) / sum(!is.na(sim.cln.D)),
     cln.R         = cln.R,
     p.cln.R       = 2 * min(sum(cln.R > sim.cln.R,na.rm=T) , sum(cln.R < sim.cln.R,na.rm=T)) / sum(!is.na(sim.cln.D)),
-    n.chances     = sum(!is.na(sim.cln.D))
+    n.chances     = sum(!is.na(sim.cln.D)),
+    pcor
   )
-  return(results)
+  return( unlist(results) )
 }
