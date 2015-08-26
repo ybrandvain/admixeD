@@ -51,7 +51,7 @@ summarizeSim <- function(geno.data,trim.method, trim.intense = .2){
        sapply (c(0.001,0.01,.05),function(X){sum( p.value < X)  / length(p.value)
   }))
   names(typeII) <- c(0.001,0.01,.05)
-  print("done")
+  #print("done")
   pw.sum <- pw.sum[with(pw.sum,as.numeric(loc_A)<11 & as.numeric(loc_B)<11),]
   pw.sum <- pw.sum[order(with(pw.sum,paste(chrom_A,chrom_B,loc_A,loc_B))),]
   return(
