@@ -1,58 +1,114 @@
-# Yaniv Brandvain & Molly Schumer 6/4/15
-# Helpfull functions for admixe'D
-# Used to load and write large files, loop across all pairwise comparisons etc. 
-# YB is still thinking about them. perhaps not suitable for a formal "package" 
-  #   because too much file making, naming, etc.. but has made our lives easiers... thoughts?
+# Yaniv work on admixed simulations Aug 21 2015
 
-chromPrep <- function(CHR, genome, a){
-  v           <- seq_along(genome[[CHR]][1,])
-  fname       <- sprintf("prep_%s.txt",CHR)
-  chr.file    <- this.lapply(v, function(L){getCline(l = genome[[CHR]][,L] , a=a)} )
-  chr.file    <- do.call(rbind, chr.file)
-  write.table(chr.file, file = fname, quote=F,row.names=F,col.names=F )
-}
+rm(list=ls())
+ls()
+source("admixedPrimaryFunctions.R") # MAKE SURE THIS PATH IS CORRECT
 
-allChromPreps = function(genome,a){ 
-  lapply(names(genome), chromPrep, genome = genome, a = a)  
-}
-
-
-loadProcessChr <- function(chr.filename, chr.start, chr.end){
-  skip.chr   <- (chr.start - 1)
-  length.chr <- countLines(chr.filename)[[1]]
-  if(length(chr.end) != 0){chr.end <- min(chr.end,length.chr)}
-  nlines.chr <- ifelse(length(chr.end)==0, 0, chr.end - skip.chr)
-  nrow.chr   <- ifelse(nlines.chr == 0, length.chr - skip.chr, nlines.chr)
-  chr.dat    <- apply(matrix(
-      scan(chr.filename, nlines = nlines.chr, skip = skip.chr), 
-      nrow = nrow.chr, byrow = TRUE),1,processLocus)
-  return(chr.dat)
-}
-
-betweenChrCompSplit <- function(CHR_A.FILENAME, CHR_B.FILENAME, a, s1 = 1, e1 = numeric(0), s2 = 1, e2 = numeric(0), return.table = FALSE){
-  #note these should be the names of the chrs; ie prep prep_'CHR_A'.txt
-  #added s for start (must be >=1)
-  #added e for end (must be <= number of markers in that prep file)
-  a.dat    <- loadProcessChr(CHR_A.FILENAME, s1, e1)
-  b.dat    <- loadProcessChr(CHR_B.FILENAME, s2, e2)
-  along.a  <- seq_along(a.dat)
-  along.b  <- seq_along(b.dat)
-  all.comps = do.call(rbind,lapply( along.a ,function(LA){
-    do.call(rbind,lapply(along.b ,function(LB){
-      c(la=LA,lb=LB,LDcalcs(l1 = a.dat[[LA]], l2 = b.dat[[LB]], a = a))      
-    }))
+summarizeSim <- function(geno.data,trim.method, trim.intense = .2){
+  # geno.data can either be a path to a file, or can be a matrix
+  if( class(geno.data)  == "character"){    geno.data <- as.matrix(read.csv(geno.data, sep = "\t"))/2 }
+  locus.pairs <-t(combn(seq_along(geno.data[1,]),2))
+  if(trim.method == "rm.sel.chr" ){
+      sel.chr <- c(grep("group1.",colnames(geno.data),fixed=T), grep("group2.",colnames(geno.data),fixed=T))
+      admixture.prop <- rowMeans(geno.data[,-sel.chr])
+      removed = NA
+  }
+  if(trim.method == "none" ){    admixture.prop <- rowMeans(geno.data) ; removed = NA}
+  if(trim.method != "none" & trim.method != "rm.focal" & trim.method  != "rm.sel.chr"){
+    rem <- trimAncestryProp(all.loci=geno.data, trim = trim.intense, method = trim.method)
+    admixture.prop <- rem$new.alpha
+    removed <- paste(rem$weirdos,collapse="_")
+    rm(rem)
+  }
+  if(trim.method == "rm.focal"){
+    chrs <- do.call(cbind,strsplit(colnames(geno.data),".",fixed=T))[1,]
+    removed.focal <- t(apply(locus.pairs,1,function(PAIR){ rowMeans(geno.data[,!chrs%in%chrs[PAIR]]) }))
+    rownames(removed.focal) <- paste(locus.pairs[,1],locus.pairs[,2])
+    removed <- NA
+  }
+  pw.sum <- apply(locus.pairs,1,function(PAIR){
+    if(trim.method == "rm.focal"){admixture.prop <- removed.focal[paste(PAIR,collapse=" "),] }
+    LDcalcs(geno.data[,PAIR[1]], geno.data[,PAIR[2]], admixture.prop)
+  })
+  pw.sum <-cbind(do.call(rbind,strsplit(colnames(geno.data)[locus.pairs[,1]],".",fixed =T)),
+      do.call(rbind,strsplit(colnames(geno.data)[locus.pairs[,2]],".",fixed =T)),
+      data.frame(t(pw.sum)))
+  colnames(pw.sum)[1:4]  <-  paste( rep(c("chrom","loc"),2) ,  rep(c("A","B"), each = 2) , sep = "_")
+  pw.sum <- pw.sum[ pw.sum$chrom_A !=pw.sum$chrom_B, ]
+  #summarize performance
+  p.val.rank.true.pos <- sum(with(pw.sum,p.value <= p.value[1]))
+  cor.rank.true.pos <- sum(with(pw.sum,abs(estimate) >= abs(estimate)[1]))
+  ld.rank.true.pos <- sum(with(pw.sum,abs(reg.D) >= abs(reg.D)[1]))
+  r2.rank.true.pos <- sum(with(pw.sum,abs(reg.R) >= abs(reg.R)[1]))
+  means <- colMeans(pw.sum[,c("reg.D","reg.R","estimate")])
+  focal <- with(pw.sum,which(chrom_A == "group4" & loc_A == 10 & chrom_B == "group5" & loc_B == 5))
+  focal <- unlist(pw.sum[focal,c("reg.D","reg.R","estimate")] )
+  quantiles <- apply(pw.sum[,c("reg.D","reg.R","estimate")],2,quantile)
+  quant <- c(quantiles)
+  names(quant) <- paste( rep(colnames(quantiles) , each = nrow(quantiles)) , rep(rownames(quantiles) , ncol(quantiles)),sep=".")
+  #note this type two error quant is 'cooked' for this sim, removing selected chroms
+  typeII <- with(pw.sum[pw.sum$chrom_A!="group1" & pw.sum$chrom_B!="group2" ,], 
+       sapply (c(0.001,0.01,.05),function(X){sum( p.value < X)  / length(p.value)
   }))
-  colnames(all.comps)[1] = unlist(strsplit("CHR_A.FILENAME",".",fixed=T))[1]
-  colnames(all.comps)[2] = unlist(strsplit("CHR_B.FILENAME",".",fixed=T))[1]
-  resultsfilename=paste("results",colnames(all.comps)[1],"start",s1,"end",e1,colnames(all.comps)[2],"start",s2,"end",e2,"comp.txt",sep="_")
-  #write.table(all.comps,file = resultsfilename, quote=F,row.names=F )
-  if(return.table){return(all.comps)}
+  names(typeII) <- c(0.001,0.01,.05)
+  print("done")
+  pw.sum <- pw.sum[with(pw.sum,as.numeric(loc_A)<11 & as.numeric(loc_B)<11),]
+  pw.sum <- pw.sum[order(with(pw.sum,paste(chrom_A,chrom_B,loc_A,loc_B))),]
+  return(
+    c(est.rank.true = cor.rank.true.pos, 
+    ld.rank.true = ld.rank.true.pos,
+    r2.rank.true = r2.rank.true.pos,
+    means = means,
+    focal = focal,
+    quant = quant,
+    typeII = typeII,
+    removed = removed)
+  )
+}
+near.path <- "/Users/ybrandva/Dropbox/LD_lowess_simulations_with_Yaniv/Admix\'em_simulation_results/yb/pulse/msg_format_subsample" 
+
+
+runAdmixeD <- function(in.file){
+  none <- summarizeSim(in.file,trim.method = "none")
+  rm.focal <- summarizeSim(in.file,trim.method = "rm.focal")
+  rm.put.sel <- summarizeSim(in.file,trim.method = "ancestry")
+  
+  print(in.file)
+  
+  # Formating output
+  all.init <- none[c( "ld.rank.true", "r2.rank.true", "means.reg.D", "means.reg.R", "focal.reg.D", "focal.reg.R" , "quant.reg.D.0%" , "quant.reg.D.25%", "quant.reg.D.50%" ,"quant.reg.D.75%","quant.reg.D.100%", "quant.reg.R.0%" , "quant.reg.R.25%", "quant.reg.R.50%" ,"quant.reg.R.75%","quant.reg.R.100%" )]
+  all.others <- do.call(c,lapply( list( none = none,  rm.focal= rm.focal,rm.put.sel=rm.put.sel), function(X){
+    X[!names(X)%in%names(all.init)]
+  }))
+  return(c(all.init,all.others))
 }
 
 
-# Example usage
-#arrArgs <- unlist(strsplit("genotypes_CALM_updatemsg.txt hybrid_index_CALM_msgupdate 1 2", " "))
-#hybridindex<-unlist(read.table(arrArgs[2],header=TRUE,as.is=T))
-#focalchrom1<-as.numeric(arrArgs[3])
-#focalchrom2<-as.numeric(arrArgs[4])
-#betweenChrCompSplit("prep_1.txt","prep_2.txt",hybridindex, s1 = 1, e1 =2, return.table = TRUE)
+# change here for mutlicore
+sim.sum <- t(sapply(paste(near.path,1:5,sep="_"), runAdmixeD))
+  rownames(sim.sum) <- NULL
+  sim.sum <- data.frame(apply(sim.sum[,-ncol(sim.sum)],2,as.numeric), rm.put.sel.removed = sim.sum[,ncol(sim.sum)]) 
+  
+
+
+
+
+
+
+# I tried a few different approaches. 
+  # "rm.sel.chr" removes the first two chroms when calculating ancestry proportions 
+  # "rm.focal" removes focal chromsomes when calculating ancestry proportions
+  # "none" calculates admixture propostions from every marker
+  # "lowcor" removes markers that poorly predict ancestry proportion when calculating ancestry proportion
+  # "cline" removes markers whos genotypes are poorly predicted by the 'genomic cline' fit for that locus  when calculating ancestry proportion
+  # "hit" removes markers with too many homozygotes given ancetry prop  when calculating ancestry proportion
+  # "ancestry" removes markers that are poorly predicted by ancestry prop when calculating ancestry proportion
+
+# In practice, "lowcor" &  "cline" are about the same, and "hit" and "ancestry" are about the same. with the latter doing a much better job of tagging selected sites. So I am now just looking at none, rm.focal, and ancestry 
+# In this implementation (on admixsimul.cfg) "rm.focal" appears to do best.
+
+
+
+
+
+

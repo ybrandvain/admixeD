@@ -1,12 +1,5 @@
-# Yaniv Brandvain & Molly Schumer 6/4/15
-# Primary functions for admixe'D
-# Used to calculate LD in admixed population [controlling for heterogeneity in ancestry proportions]
-# If we where to release a packge these would probably be the primary functions.
 
-#install.packages("ppcor")
-#library(ppcor)
-pcor <- function (x, method = c("pearson", "kendall", "spearman")) 
-{
+pcor <- function (x, method = c("pearson", "kendall", "spearman")) {
   method <- match.arg(method)
   if (is.data.frame(x)) 
     x <- as.matrix(x)
@@ -20,7 +13,7 @@ pcor <- function (x, method = c("pearson", "kendall", "spearman"))
   cvx <- cov(x, method = method)
   if(det(cvx) == 0){
     return(list(estimate = matrix(rep(NA,9),nrow=3), p.value = matrix(rep(NA,9),nrow=3), statistic = matrix(rep(NA,9),nrow=3), 
-         n = n, gp = gp, method = method)) }
+                n = n, gp = gp, method = method)) }
   icvx <- solve(cvx)
   pcor <- -cov2cor(icvx)
   diag(pcor) <- 1
@@ -38,18 +31,66 @@ pcor <- function (x, method = c("pearson", "kendall", "spearman"))
        n = n, gp = gp, method = method)
 }
 
-pcor.test <- function (x, y, z, method = c("pearson", "kendall", "spearman")) 
-{
+pcor.test <- function (x, y, z, method = c("pearson", "kendall", "spearman")) {
   method <- match.arg(method)
   x <- c(x)
   y <- c(y)
   z <- as.data.frame(z)
   xyz <- data.frame(x, y, z)
-  pcor = pcor(xyz, method = method)
+  if( sum(abs(with(xyz,x-y))) == 0){
+    return(data.frame(estimate = NA, p.value = NA, 
+               statistic = NA, n = NA, gp = NA, 
+               Method = method)  )
+  }
+  pcor = pcor(xyz, method = method) 
   data.frame(estimate = pcor$est[1, 2], p.value = pcor$p.value[1, 2], 
              statistic = pcor$statistic[1, 2], n = pcor$n, gp = pcor$gp, 
              Method = method)
 }
+
+LDcalcs <- function(l1,l2,a){
+  ok <- !is.na(l1 + l2)
+  these.genos <- cbind(A = l1, B = l2)[ok,]
+#  allele.counts <- c(colSums(these.genos), colSums(abs(1-these.genos)))
+#  names(allele.counts) <- c("A","B","a","b")
+#  geno.table <- table(data.frame(A=factor(these.genos[,1], levels = c(1,.5,0)),B=factor(these.genos[,2], levels = c(1,.5,0))))
+#  geno.counts <- c(  
+#    AB = sum(geno.table[1,] * c(1,1/2,0)) + sum(geno.table[2,]/2 * c(1,1/2,0)),
+#    Ab = sum(geno.table[1,] * c(0,1/2,1)) + sum(geno.table[2,]/2 * c(0,1/2,1)),
+#    aB = sum(geno.table[3,] * c(1,1/2,0)) + sum(geno.table[2,]/2 * c(1,1/2,0)),
+#    ab = sum(geno.table[3,] * c(0,1/2,1)) + sum(geno.table[2,]/2 * c(0,1/2,1))
+#  )
+  p.cor = pcor.test( these.genos[,1], these.genos[,2],a[ok])[1:3]
+  results <-c(
+    #allele.counts, 
+    #geno.counts,
+    reg.D         = mean(l1*l2,na.rm=T) - mean(l1[ok]) * mean(l2[ok]),
+    reg.R         = (mean(l1*l2,na.rm=T) - mean(l1[ok]) * mean(l2[ok])) / sqrt(var(l1[ok])*var(l2[ok])),
+    adx.D         = mean(l1*l2-a^2,na.rm=T),
+    p.cor
+  )
+  return( unlist(results) )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 LL.fn <- function(par, SD = SD, x, n, y) {
@@ -63,7 +104,6 @@ LL.fn <- function(par, SD = SD, x, n, y) {
   p            <- replace(p, p >= 1, 1 - .Machine$double.neg.eps)
   this.LL      <- sum(dbinom(y, n, p, log = TRUE))
 }
-
 
 gcline <- function(x, n, y){
   # Modified from the HIest package (http://cran.r-project.org/web/packages/HIest/index.html)
@@ -85,25 +125,8 @@ gcline <- function(x, n, y){
   return(this.gc)
 }
 
-processLocus <- function(l.vals){
-  # This takes in, as data, a long vector that is the output of getCline (below)
-  # Returns a well formated verstion of this data as an object of class "admx"  
-  n.inds       <-   l.vals[1]
-  n.reps       <-   l.vals[2]
-  l            <-   l.vals[3:(2+n.inds)]
-  last         <-   2+n.inds
-  sim.l        <-   matrix(l.vals[(1+last):(last+n.reps*n.inds)], nrow = n.inds)
-  last         <-   last+n.reps*n.inds
-  cline        <-   l.vals[(1+last):(last+n.inds)]
-  last         <-   last+n.inds
-  sim.cline    <-   matrix(l.vals[(1+last):(last+n.reps*n.inds)], nrow = n.inds)
-  l.rnk.lklhd  <-   l.vals[length(l.vals)] 
-  return(list(n.inds = n.inds, n.reps = n.reps, l = l, sim.l = sim.l, 
-             cline = cline, l.rnk.lklhd = l.rnk.lklhd, sim.cline = sim.cline
-  ))
-}
 
-getCline <- function(l, a, reps = 1000, return.processed = FALSE){
+getCline <- function(l, a, return.processed = FALSE){
   # summarizes the "genomic cline" for a locus, includes raw data, and data generated for the null distribution
   old.l        <- l
   na.inds      <- which(is.na(l))
@@ -112,59 +135,51 @@ getCline <- function(l, a, reps = 1000, return.processed = FALSE){
   cline        <- try(gcline(a[ok.inds], n = 2, 2*l))
   tryerror     <- class(cline) == "try-error"
   if(class(cline) == "try-error" ){
-    chr.admx       <- c(length(old.l), reps,old.l,rep(NA,reps*length(old.l)),
-                    rep(NA,length(old.l)), rep(NA,reps*length(old.l)), NA )
-    if(return.processed){return(  processLocus(chr.admx)  )}
-    return(chr.admx)
+    return(lklhd = NA)
   }
-  sim.l        <- replicate(reps,rbinom(length(cline),2,cline)/2)
-  sim.vals     <- apply(sim.l,2,function(p){
-    sim.cline      <- try(gcline(a[ok.inds], n = 2, 2*p))
-    if(class(sim.cline)=="try-error") {sim.cline <- rep(NA,sum(ok.inds))}
-    return(sim.cline)
-  })
-  p.l.given.cline <- sum(dbinom(2*l,2,cline,log=T))
-  p.l.sims.given.cline <- apply(sim.l,2,function(X){ sum(dbinom(2*X,2,cline,log=T)) })
-  l.rnk.lklhd  <- sum(p.l.given.cline  > p.l.sims.given.cline)/ reps
-  #dealing with NAs
-  tmp.sim.l    <- matrix(nrow= length(a),ncol=reps); tmp.sim.l[ok.inds,] =  sim.l; sim.l = tmp.sim.l
-  tmp.cline    <- rep(NA,length(old.l)); tmp.cline[ok.inds] = cline; cline = tmp.cline
-  tmp.sim.vals <- matrix(nrow= length(a),ncol=reps); tmp.sim.vals[ok.inds,] = sim.vals; sim.vals = tmp.sim.vals
-  chr.admx     <- c( length(old.l), reps, old.l, c(sim.l), cline, c(sim.vals), l.rnk.lklhd )
-  if(return.processed){return(  processLocus(chr.admx)  )}
-  return(chr.admx)
+  return( sum(dbinom(2*l,2,cline,log=T)) / length(l))
 }
 
-LDcalcs <- function(l1,l2,a){
-  ok <- !is.na(l1$l + l2$l)
-  these.genos <- cbind(A = l1$l, B = l2$l)[ok,]
-  allele.counts <- c(colSums(these.genos), colSums(abs(1-these.genos)))
-  names(allele.counts) <- c("A","B","a","b")
-  geno.table <- table(data.frame(A=factor(these.genos[,1], levels = c(1,.5,0)),B=factor(these.genos[,2], levels = c(1,.5,0))))
-  geno.counts <- c(  
-    AB = sum(geno.table[1,] * c(1,1/2,0)) + sum(geno.table[2,]/2 * c(1,1/2,0)),
-    Ab = sum(geno.table[1,] * c(0,1/2,1)) + sum(geno.table[2,]/2 * c(0,1/2,1)),
-    aB = sum(geno.table[3,] * c(1,1/2,0)) + sum(geno.table[2,]/2 * c(1,1/2,0)),
-    ab = sum(geno.table[3,] * c(0,1/2,1)) + sum(geno.table[2,]/2 * c(0,1/2,1))
-  )
-  cln.D        <- mean(  (l1$l - l1$cline) * (l2$l - l2$cline), na.rm=T)
-  cln.R        <- cln.D / (sqrt(mean((l1$l-l1$cline)[ok]^2))*sqrt(mean((l2$l-l2$cline)[ok]^2)))
-  sim.cln.D    <- colMeans(  (l1$sim.l- l1$sim.cline) * (l2$sim.l- l2$sim.cline),na.rm=T)
-  sim.cln.R    <- sim.cln.D / 
-    (sqrt(colMeans((l1$sim.l-l1$sim.cline)[ok,]^2)) * sqrt(colMeans((l2$sim.l-l2$sim.cline)[ok,]^2)))
-  p.cor = pcor.test( these.genos[,1], these.genos[,2],a[ok])[1:3]
-  results <-c(
-    allele.counts, 
-    geno.counts,
-    reg.D         = mean(l1$l*l2$l,na.rm=T) - mean(l1$l[ok]) * mean(l2$l[ok]),
-    reg.R         = (mean(l1$l*l2$l,na.rm=T) - mean(l1$l[ok]) * mean(l2$l[ok])) / sqrt(var(l1$l[ok])*var(l2$l[ok])),
-    adx.D         = mean(l1$l*l2$l-a^2,na.rm=T),
-    cln.D         = cln.D,
-    p.cln.D       = 2 * min(sum(cln.D > sim.cln.D,na.rm=T) , sum(cln.D < sim.cln.D,na.rm=T)) / sum(!is.na(sim.cln.D)),
-    cln.R         = cln.R,
-    p.cln.R       = 2 * min(sum(cln.R > sim.cln.R,na.rm=T) , sum(cln.R < sim.cln.R,na.rm=T)) / sum(!is.na(sim.cln.D)),
-    n.chances     = sum(!is.na(sim.cln.D)),
-    p.cor
-  )
-  return( unlist(results) )
+
+
+#trimAncestryProp (geno.data)
+
+trimAncestryProp <- function(all.loci, trim = .20, method = "lowcor" ){
+  #all.loci genotypes for everybody [rows = inds, columns = loci]
+  # "lowcor",  "ancestry", "cline", "hit"
+  doTrim <- function(this.stat){
+    normals <- this.stat > quantile( this.stat, prob = trim)
+    list(new.alpha = rowMeans(all.loci[,normals]), weirdos = which(!normals) )
+  }
+  initial.alpha <- rowMeans(all.loci,na.rm=T)
+  allele.freqs <- colMeans(all.loci,na.rm=T) 
+  if(method == "lowcor"){
+    # Remove loci with the lowest correlation with alpha
+    this.tmp <- c( cor(initial.alpha,  all.loci, use = "pairwise.complete.obs") )
+    return( doTrim(  this.tmp  ) )
+    rm(this.tmp)
+  }
+  if(method == "ancestry"){
+    # ameasure of how poorly the model fits given ancestry propotion, 
+    #standadized by ample size and expected variance.
+    this.tmp <- colSums(apply(
+      2*all.loci,2,  dbinom,  size = 2, prob = initial.alpha , log = T),
+      na.rm = T)
+    this.tmp <- this.tmp  / ( colSums(!is.na(all.loci))) 
+    return( doTrim(  this.tmp  ) )
+    rm(this.tmp)
+  }
+  if(method == "cline"){
+    this.tmp <- apply(all.loci,2,function(X){as.numeric(getCline(l = X, a = initial.alpha))  })
+    return( doTrim(  this.tmp  ) )
+    rm(this.tmp)
+  }
+  if(method == "hit"){
+    this.tmp <-colSums(all.loci == .5,na.rm=T) / 
+      colSums(2 * initial.alpha  * (1-initial.alpha ) * !is.na(all.loci))
+    return( doTrim(  this.tmp  ) )
+    rm(this.tmp)
+  }
 }
+
+
