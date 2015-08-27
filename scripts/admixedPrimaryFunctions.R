@@ -48,28 +48,22 @@ pcor.test <- function (x, y, z, method = c("pearson", "kendall", "spearman")) {
              Method = method)
 }
 
-LDcalcs <- function(l1,l2,a){
+LDcalcs <- function(l1,l2,a, to.return = "both"){
   ok <- !is.na(l1 + l2)
   these.genos <- cbind(A = l1, B = l2)[ok,]
-#  allele.counts <- c(colSums(these.genos), colSums(abs(1-these.genos)))
-#  names(allele.counts) <- c("A","B","a","b")
-#  geno.table <- table(data.frame(A=factor(these.genos[,1], levels = c(1,.5,0)),B=factor(these.genos[,2], levels = c(1,.5,0))))
-#  geno.counts <- c(  
-#    AB = sum(geno.table[1,] * c(1,1/2,0)) + sum(geno.table[2,]/2 * c(1,1/2,0)),
-#    Ab = sum(geno.table[1,] * c(0,1/2,1)) + sum(geno.table[2,]/2 * c(0,1/2,1)),
-#    aB = sum(geno.table[3,] * c(1,1/2,0)) + sum(geno.table[2,]/2 * c(1,1/2,0)),
-#    ab = sum(geno.table[3,] * c(0,1/2,1)) + sum(geno.table[2,]/2 * c(0,1/2,1))
-#  )
-  p.cor = pcor.test( these.genos[,1], these.genos[,2],a[ok])[1:3]
-  results <-c(
-    #allele.counts, 
-    #geno.counts,
-    reg.D         = mean(l1*l2,na.rm=T) - mean(l1[ok]) * mean(l2[ok]),
-    reg.R         = (mean(l1*l2,na.rm=T) - mean(l1[ok]) * mean(l2[ok])) / sqrt(var(l1[ok])*var(l2[ok])),
-    adx.D         = mean(l1*l2-a^2,na.rm=T),
-    p.cor
-  )
-  return( unlist(results) )
+  if(to.return == "both"){
+    reg   = with(cor.test(these.genos[,1], these.genos[,2]),c(estimate=estimate[[1]],p.value=p.value))
+    p.cor = pcor.test( these.genos[,1], these.genos[,2],a[ok])[1:2]
+    both = unlist(c(reg,p.cor))
+    names(both) <- paste(rep(c("reg","partial"),each=2),names(both))
+    return(both)
+  }
+  if(to.return == "partial"){ return(
+    pcor.test( these.genos[,1], these.genos[,2],a[ok])[1:2]
+  ) }  
+  if(to.return == "regular"){ return( 
+      with(cor.test(these.genos[,1], these.genos[,2]),c(estimate=estimate[[1]],p.value=p.value)) 
+    ) }  
 }
 
 

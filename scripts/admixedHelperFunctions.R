@@ -1,98 +1,108 @@
-# Yaniv work on admixed simulations Aug 21 2015
+# Yaniv work on admixed simulations Aug 27 2015
 
 rm(list=ls())
 ls()
 source("admixedPrimaryFunctions.R") # MAKE SURE THIS PATH IS CORRECT
 
-summarizeSim <- function(geno.data,trim.method, trim.intense = .2){
+summarizeSim <- function(geno.data,trim.method, sel.loci = NA, trim.intense = .2){
   # geno.data can either be a path to a file, or can be a matrix
-  if( class(geno.data)  == "character"){    geno.data <- as.matrix(read.csv(geno.data, sep = "\t"))/2 }
-  locus.pairs <-t(combn(seq_along(geno.data[1,]),2))
-  if(trim.method == "rm.sel.chr" ){
-      sel.chr <- c(grep("group1.",colnames(geno.data),fixed=T), grep("group2.",colnames(geno.data),fixed=T))
-      admixture.prop <- rowMeans(geno.data[,-sel.chr])
-      removed = NA
+  if( class(geno.data)  == "character"){    
+    geno.data <- as.matrix(read.csv(geno.data, sep = "\t"))/2 
   }
-  if(trim.method == "none" ){    admixture.prop <- rowMeans(geno.data) ; removed = NA}
-  if(trim.method != "none" & trim.method != "rm.focal" & trim.method  != "rm.sel.chr"){
+  locus.pairs <-t(combn(seq_along(geno.data[1,]),2))
+  if(trim.method == "none" | trim.method == "regularR2"){    
+    admixture.prop <- rowMeans(geno.data)
+    removed <- NA
+    if(trim.method == "none"){
+      pw.sum <- apply(locus.pairs,1,function(PAIR){
+        LDcalcs(geno.data[,PAIR[1]], geno.data[,PAIR[2]], admixture.prop, to.return = "partial")
+      })
+    }
+    if(trim.method == "regularR2"){
+      pw.sum <- apply(locus.pairs,1,function(PAIR){
+        LDcalcs(geno.data[,PAIR[1]], geno.data[,PAIR[2]], admixture.prop, to.return = "regular")
+      })}
+  }
+  if(trim.method == "rm.sel.chr" ){
+    sel.chr <- c(grep("group1.",colnames(geno.data),fixed=T), grep("group2.",colnames(geno.data),fixed=T))
+    admixture.prop <- rowMeans(geno.data[,-sel.chr])
+    removed = NA
+    pw.sum <- apply(locus.pairs,1,function(PAIR){
+      LDcalcs(geno.data[,PAIR[1]], geno.data[,PAIR[2]], admixture.prop, to.return = "partial")
+    })
+  }
+  if(trim.method != "none" & trim.method != "rm.focal" & trim.method  != "rm.sel.chr" & trim.method != "regularR2"){
     rem <- trimAncestryProp(all.loci=geno.data, trim = trim.intense, method = trim.method)
     admixture.prop <- rem$new.alpha
     removed <- paste(rem$weirdos,collapse="_")
     rm(rem)
+    pw.sum <- apply(locus.pairs,1,function(PAIR){
+      LDcalcs(geno.data[,PAIR[1]], geno.data[,PAIR[2]], admixture.prop, to.return = "partial")
+    })
   }
   if(trim.method == "rm.focal"){
     chrs <- do.call(cbind,strsplit(colnames(geno.data),".",fixed=T))[1,]
     removed.focal <- t(apply(locus.pairs,1,function(PAIR){ rowMeans(geno.data[,!chrs%in%chrs[PAIR]]) }))
     rownames(removed.focal) <- paste(locus.pairs[,1],locus.pairs[,2])
     removed <- NA
+    pw.sum <- apply(locus.pairs,1,function(PAIR){
+      admixture.prop <- removed.focal[paste(PAIR,collapse=" "),] 
+      LDcalcs(geno.data[,PAIR[1]], geno.data[,PAIR[2]], admixture.prop, to.return = "partial")
+    })
   }
-  pw.sum <- apply(locus.pairs,1,function(PAIR){
-    if(trim.method == "rm.focal"){admixture.prop <- removed.focal[paste(PAIR,collapse=" "),] }
-    LDcalcs(geno.data[,PAIR[1]], geno.data[,PAIR[2]], admixture.prop)
-  })
-  pw.sum <-cbind(do.call(rbind,strsplit(colnames(geno.data)[locus.pairs[,1]],".",fixed =T)),
-      do.call(rbind,strsplit(colnames(geno.data)[locus.pairs[,2]],".",fixed =T)),
-      data.frame(t(pw.sum)))
+  c1 <- do.call(rbind,strsplit(colnames(geno.data)[locus.pairs[,1]],".",fixed =T))
+  c2 <- do.call(rbind,strsplit(colnames(geno.data)[locus.pairs[,2]],".",fixed =T))
+  if(class(pw.sum) == "list"){ pw.sum <- data.frame( do.call(rbind,pw.sum)   )}
+  if(class(pw.sum) == "matrix"){ pw.sum <- data.frame(t(pw.sum)) }
+  pw.sum <-cbind(c1,c2,pw.sum)
   colnames(pw.sum)[1:4]  <-  paste( rep(c("chrom","loc"),2) ,  rep(c("A","B"), each = 2) , sep = "_")
   pw.sum <- pw.sum[ pw.sum$chrom_A !=pw.sum$chrom_B, ]
-  #summarize performance
-  p.val.rank.true.pos <- sum(with(pw.sum,p.value <= p.value[1]))
-  cor.rank.true.pos <- sum(with(pw.sum,abs(estimate) >= abs(estimate)[1]))
-  ld.rank.true.pos <- sum(with(pw.sum,abs(reg.D) >= abs(reg.D)[1]))
-  r2.rank.true.pos <- sum(with(pw.sum,abs(reg.R) >= abs(reg.R)[1]))
-  means <- colMeans(pw.sum[,c("reg.D","reg.R","estimate")])
-  focal <- with(pw.sum,which(chrom_A == "group4" & loc_A == 10 & chrom_B == "group5" & loc_B == 5))
-  focal <- unlist(pw.sum[focal,c("reg.D","reg.R","estimate")] )
-  quantiles <- apply(pw.sum[,c("reg.D","reg.R","estimate")],2,quantile)
-  quant <- c(quantiles)
-  names(quant) <- paste( rep(colnames(quantiles) , each = nrow(quantiles)) , rep(rownames(quantiles) , ncol(quantiles)),sep=".")
-  #note this type two error quant is 'cooked' for this sim, removing selected chroms
-  typeII <- with(pw.sum[pw.sum$chrom_A!="group1" & pw.sum$chrom_B!="group2" ,], 
-       sapply (c(0.001,0.01,.05),function(X){sum( p.value < X)  / length(p.value)
-  }))
-  names(typeII) <- c(0.001,0.01,.05)
-  #print("done")
-  pw.sum <- pw.sum[with(pw.sum,as.numeric(loc_A)<11 & as.numeric(loc_B)<11),]
-  pw.sum <- pw.sum[order(with(pw.sum,paste(chrom_A,chrom_B,loc_A,loc_B))),]
-  return(
-    c(est.rank.true = cor.rank.true.pos, 
-    ld.rank.true = ld.rank.true.pos,
-    r2.rank.true = r2.rank.true.pos,
-    means = means,
-    focal = focal,
-    quant = quant,
-    typeII = typeII,
-    removed = removed)
-  )
+  #summarize performance  
+  if(is.na(sel.loci)){foc <- "none" }
+  if(!is.na(sel.loci)){foc <- sapply(sel.loci, function(X){  paste(unlist(strsplit(X,".",fixed = T))[c(1,3)],collapse =" ")  }) }  
+  not.our.chr.pairs <- !with(pw.sum,paste(chrom_A,chrom_B) %in% foc)
+  perform <- with(pw.sum[not.our.chr.pairs,],c(
+      false.pos.alpha.001 = sum(p.value < 0.001) / length(p.value),
+      false.pos.alpha.01  = sum(p.value < 0.01) / length(p.value),
+      false.pos.alpha.05  = sum(p.value < 0.05) / sum(not.our.chr.pairs),
+      quantiles = quantile(estimate),
+      focal.p = p.value[chrom_A == "group4" & loc_A == 10 & chrom_B == "group5" & loc_B == 5],
+      focal.estimate = estimate[chrom_A == "group4" & loc_A == 10 & chrom_B == "group5" & loc_B == 5]
+  ))  
+  if(!is.na(sel.loci)){
+      true.pos <- lapply( sel.loci , function(PAIR){   
+        focal.pair <- with(pw.sum, paste(chrom_A,loc_A,sep = ".")%in%PAIR & paste(chrom_B,loc_B,sep = ".")%in%PAIR)
+        with(pw.sum,
+             c( p.val.rank.true.pos = sum(p.value <= p.value[focal.pair]) , 
+                cor.rank.true.pos   = sum(abs(estimate) >= abs(estimate)[focal.pair])   ))
+      })
+      tmp.names <- names(true.pos[[1]])
+      true.pos <- Reduce(paste,true.pos)
+      names(true.pos) <-  tmp.names
+      perform <- c(perform,true.pos, n.comps = nrow(pw.sum))
+    }
+  return(list( perform=perform, removed = removed ))
 }
-near.path <- "/Users/ybrandva/Dropbox/LD_lowess_simulations_with_Yaniv/Admix\'em_simulation_results/yb/pulse/msg_format_subsample" 
+path <- "/Users/ybrandva/Dropbox/LD_lowess_simulations_with_Yaniv/Admix\'em_simulation_results/yb/pulse/" 
 
 
 runAdmixeD <- function(in.file){
-  none <- summarizeSim(in.file,trim.method = "none")
-  rm.focal <- summarizeSim(in.file,trim.method = "rm.focal")
-  rm.put.sel <- summarizeSim(in.file,trim.method = "ancestry")
-  
   print(in.file)
-  
-  # Formating output
-  all.init <- none[c( "ld.rank.true", "r2.rank.true", "means.reg.D", "means.reg.R", "focal.reg.D", "focal.reg.R" , "quant.reg.D.0%" , "quant.reg.D.25%", "quant.reg.D.50%" ,"quant.reg.D.75%","quant.reg.D.100%", "quant.reg.R.0%" , "quant.reg.R.25%", "quant.reg.R.50%" ,"quant.reg.R.75%","quant.reg.R.100%" )]
-  all.others <- do.call(c,lapply( list( none = none,  rm.focal= rm.focal,rm.put.sel=rm.put.sel), function(X){
-    X[!names(X)%in%names(all.init)]
-  }))
-  return(c(all.init,all.others))
+  approach <- list(regularR2="regularR2", none = "none", rm_focal = "rm.focal", rm_put_sel = "ancestry")
+  sims <- lapply( approach, function(TRIM){ summarizeSim(in.file,TRIM,sel.loci = list(c("group1.1","group2.1"))) })
+  list( perform = do.call(c,lapply(sims,function(X){X[[1]]})) , removed = sims$rm.put.sel$removed) 
 }
 
 
+
+msg_format_subsample
 # change here for mutlicore
-sim.sum <- t(sapply(paste(near.path,1:5,sep="_"), runAdmixeD))
-  rownames(sim.sum) <- NULL
-  sim.sum <- data.frame(apply(sim.sum[,-ncol(sim.sum)],2,as.numeric), rm.put.sel.removed = sim.sum[,ncol(sim.sum)]) 
-  
+sim.sum <- lapply(paste(path,"msg_format_subsample_",1:100,sep=""), runAdmixeD)
+sim.perform <- t(sapply(sim.sum,function(X){X[["perform"]]}))
+IDing.sel <- sapply(sim.sum,function(X){X[["removed"]]})
 
-
-
-
+write.csv( sim.perform , file = paste(path,"perform.csv",sep="") )
+write.csv( IDing.sel , file = paste(path,"IDingsel.csv",sep="") )
 
 
 # I tried a few different approaches. 
