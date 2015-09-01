@@ -1,14 +1,15 @@
 # Yaniv work on admixed simulations Aug 27 2015
+library(parallel)
 
 rm(list=ls())
 ls()
-source("admixedPrimaryFunctions.R") # MAKE SURE THIS PATH IS CORRECT
-
+source('~/Downloads/admixedPrimaryFunctions.R')
 summarizeSim <- function(geno.data,trim.method, sel.loci = NA, trim.intense = .2){
   # geno.data can either be a path to a file, or can be a matrix
   if( class(geno.data)  == "character"){    
     geno.data <- as.matrix(read.csv(geno.data, sep = "\t"))/2 
   }
+  return(dim(geno.data))
   locus.pairs <-t(combn(seq_along(geno.data[1,]),2))
   if(trim.method == "none" | trim.method == "regularR2"){    
     admixture.prop <- rowMeans(geno.data)
@@ -83,26 +84,27 @@ summarizeSim <- function(geno.data,trim.method, sel.loci = NA, trim.intense = .2
     }
   return(list( perform=perform, removed = removed ))
 }
-path <- "/Users/ybrandva/Dropbox/LD_lowess_simulations_with_Yaniv/Admix\'em_simulation_results/yb/pulse/" 
+
+#setwd("~/Dropbox/LD_lowess_simulations_with_Yaniv/Admix'em_simulation_results/molly/neutral")
+#	sapply(list.files(),function(p){
+#		runAdmixeD <- function(in.file){
+#	  		print(in.file)
+#	  		approach <- list(regularR2="regularR2", none = "none", rm_focal = "rm.focal", rm_put_sel = "ancestry")
+#	  		sims <- lapply( approach, function(TRIM){ summarizeSim(in.file,TRIM) }) #,sel.loci = list(c("group1.1","group2.1"))) })
+#	  		list( perform = do.call(c,lapply(sims,function(X){X[[1]]})) , removed = sims$rm_put_sel$removed) 
+#		}
+#		path <- paste( p, "/msg_format_subsample_",sep="")
+		# change here for mutlicore		 
+#		sim.sum <- mclapply(paste( path, 1:500, sep = ""), runAdmixeD,mc.cores=7)
+#		sim.perform <- t(sapply(sim.sum,function(X){X[["perform"]]}))
+#		IDing.sel <- sapply(sim.sum,function(X){X[["removed"]]})
+#		write.csv( sim.perform , file = paste(p,"/","perform.csv",sep="") )
+#		write.csv( IDing.sel , file = paste(p,"/","IDingsel.csv",sep="") )
+#		p
+#	}
+#)
 
 
-runAdmixeD <- function(in.file){
-  print(in.file)
-  approach <- list(regularR2="regularR2", none = "none", rm_focal = "rm.focal", rm_put_sel = "ancestry")
-  sims <- lapply( approach, function(TRIM){ summarizeSim(in.file,TRIM,sel.loci = list(c("group1.1","group2.1"))) })
-  list( perform = do.call(c,lapply(sims,function(X){X[[1]]})) , removed = sims$rm.put.sel$removed) 
-}
-
-
-
-msg_format_subsample
-# change here for mutlicore
-sim.sum <- lapply(paste(path,"msg_format_subsample_",1:100,sep=""), runAdmixeD)
-sim.perform <- t(sapply(sim.sum,function(X){X[["perform"]]}))
-IDing.sel <- sapply(sim.sum,function(X){X[["removed"]]})
-
-write.csv( sim.perform , file = paste(path,"perform.csv",sep="") )
-write.csv( IDing.sel , file = paste(path,"IDingsel.csv",sep="") )
 
 
 # I tried a few different approaches. 
@@ -121,4 +123,36 @@ write.csv( IDing.sel , file = paste(path,"IDingsel.csv",sep="") )
 
 
 
-
+setwd("~/Dropbox/LD_lowess_simulations_with_Yaniv/Admix'em_simulation_results/molly/selection")
+XXX<-sapply(list.files(),function(p){
+		runAdmixeD <- function(foc,sel.loci){
+			if(sel.loci == "XXX") {
+				temp.sel <- read.csv(paste(p, "/selected_pairs_log_",foc,sep=""),sep = "\t",stringsAsFactors=FALSE)
+				temp.sel$chr1name <- as.numeric(sapply( strsplit( gsub("chr","",temp.sel$chr1name) , "_") ,function(X){X[1]}))
+				temp.sel$chr2name <- as.numeric(sapply( strsplit( gsub("chr","",temp.sel$chr2name) , "_") ,function(X){X[1]}))
+				lapply( 1:nrow(temp.sel),function(X){
+					recover()
+				})
+			}
+			in.file <- paste( path, foc, sep = "")
+#	  		print(in.file)
+	  		approach <- list(regularR2="regularR2", none = "none", rm_focal = "rm.focal", rm_put_sel = "ancestry")
+	  		return( summarizeSim(in.file,"a",sel.loci = sel.loci ) )
+	  		sims <- lapply( approach[3:4], function(TRIM){ summarizeSim(in.file,TRIM,sel.loci = sel.loci ) })
+	  		list( perform = do.call(c,lapply(sims,function(X){X[[1]]})) , removed = sims$rm_put_sel$removed) 
+		}
+		path <- paste( p, "/msg_format_subsample_",sep="")
+		print(p)
+		# change here for mutlicore		 
+#		sim.sum <- mclapply(paste( path, 1:2, sep = ""), runAdmixeD,mc.cores=7)
+		sel <- ifelse( length(grep("selected_pairs_log",list.files(p))) == 0, list(c("group1.1","group2.1")),"rand")
+		maxim <- ifelse( p == "migration_parental_sel_0.5",411, 500)
+		sim.sum <- lapply(1:maxim, runAdmixeD,sel )
+		return(sim.sum)
+	#	sim.perform <- t(sapply(sim.sum,function(X){X[["perform"]]}))
+	#	IDing.sel <- sapply(sim.sum,function(X){X[["removed"]]})
+	#	write.csv( sim.perform , file = paste(p,"/","perform.csv",sep="") )
+	#	write.csv( IDing.sel , file = paste(p,"/","IDingsel.csv",sep="") )
+	#	p
+	}
+)
