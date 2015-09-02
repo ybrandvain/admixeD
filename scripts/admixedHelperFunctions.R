@@ -6,7 +6,7 @@ ls()
 source('~/Desktop/ad/admixedPrimaryFunctions.R')
 
 
-summarizeSim <- function(geno.data,trim.method, sel.loci = NA, trim.intense = .2){
+summarizeSim <- function(geno.data,trim.method, sel.loci = NA, just.estimate = FALSE, trim.intense = .2){
   # geno.data can either be a path to a file, or can be a matrix
   if( class(geno.data)  == "character"){    
     geno.data <- as.matrix(read.csv(geno.data, sep = "\t"))/2 
@@ -60,6 +60,7 @@ summarizeSim <- function(geno.data,trim.method, sel.loci = NA, trim.intense = .2
   pw.sum <-cbind(c1,c2,pw.sum)
   colnames(pw.sum)[1:4]  <-  paste( rep(c("chrom","loc"),2) ,  rep(c("A","B"), each = 2) , sep = "_")
   pw.sum <- pw.sum[ pw.sum$chrom_A !=pw.sum$chrom_B, ]
+  if(just.estimate) {return(pw.sum)}
   #summarize performance  
   if(is.na(sel.loci)){foc <- "none" }
   if(!is.na(sel.loci)){foc <- sapply(sel.loci, function(X){  paste(unlist(strsplit(X,".",fixed = T))[c(1,3)],collapse =" ")  }) }  
