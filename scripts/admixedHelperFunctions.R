@@ -14,7 +14,7 @@ summarizeSim <- function(geno.data,trim.method, sel.loci = NA, just.estimate = F
   if( nrow(geno.data) == 0){return(NULL)}
   locus.pairs <-t(combn(seq_along(geno.data[1,]),2))
   if(trim.method == "none" | trim.method == "regularR2"){    
-    admixture.prop <- rowMeans(geno.data)
+    admixture.prop <- rowMeans(geno.data, na.rm=T)
     removed <- NA
     if(trim.method == "none"){
       pw.sum <- apply(locus.pairs,1,function(PAIR){
@@ -28,7 +28,7 @@ summarizeSim <- function(geno.data,trim.method, sel.loci = NA, just.estimate = F
   }
   if(trim.method == "rm.sel.chr" ){
     sel.chr <- c(grep("group1.",colnames(geno.data),fixed=T), grep("group2.",colnames(geno.data),fixed=T))
-    admixture.prop <- rowMeans(geno.data[,-sel.chr])
+    admixture.prop <- rowMeans(geno.data[,-sel.chr], na.rm=T)
     removed = NA
     pw.sum <- apply(locus.pairs,1,function(PAIR){
       LDcalcs(geno.data[,PAIR[1]], geno.data[,PAIR[2]], admixture.prop, to.return = "partial")
@@ -45,7 +45,7 @@ summarizeSim <- function(geno.data,trim.method, sel.loci = NA, just.estimate = F
   }
   if(trim.method == "rm.focal"){
     chrs <- do.call(cbind,strsplit(colnames(geno.data),".",fixed=T))[1,]
-    removed.focal <- t(apply(locus.pairs,1,function(PAIR){ rowMeans(geno.data[,!chrs%in%chrs[PAIR]]) }))
+    removed.focal <- t(apply(locus.pairs,1,function(PAIR){ rowMeans(geno.data[,!chrs%in%chrs[PAIR]], na.rm=T) }))
     rownames(removed.focal) <- paste(locus.pairs[,1],locus.pairs[,2])
     removed <- NA
     pw.sum <- apply(locus.pairs,1,function(PAIR){
