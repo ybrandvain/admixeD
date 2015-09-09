@@ -143,7 +143,7 @@ trimAncestryProp <- function(all.loci, trim = .20, method = "lowcor" ){
   # "lowcor",  "ancestry", "cline", "hit"
   doTrim <- function(this.stat){
     normals <- this.stat > quantile( this.stat, prob = trim)
-    list(new.alpha = rowMeans(all.loci[,normals]), weirdos = which(!normals) )
+    list(new.alpha = rowMeans(all.loci[,normals],na.rm=TRUE), weirdos = which(!normals) )
   }
   initial.alpha <- rowMeans(all.loci,na.rm=T)
   allele.freqs <- colMeans(all.loci,na.rm=T) 
